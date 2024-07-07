@@ -10,6 +10,59 @@
 
 volatile struct proc* crypto_srv_proc = 0;
 
+uint64 map_shared_pages(struct proc* src_proc, struct proc* dst_proc, uint64 src_va, uint64 size) {
+  if (size <= 0) {
+    return 0;
+  }
+
+  if (src_va < 0 || src_va + size > src_proc->sz) {
+    return 0;
+  }
+
+  uint64 dst_va = PGROUNDUP(dst_proc->sz) + src_va - PGROUNDDOWN(src_va);
+  if (dst_va + size - 1 > MAXVA) {
+    return 0;
+  }
+
+  uint64 va = PGROUNDDOWN(src_va);
+  uint64 va2 = PGROUNDDOWN(dst_va);
+  for (int i = 0; i < (size / PGSIZE) + 1; i++) {
+    pte_t *pte = walk(src_proc->pagetable, va, 0);
+    uint64 src_pa_for_test = PTE2PA(*pte);
+    if (pte == 0 || ((*pte & PTE_V) == 0) || ((*pte & PTE_U) == 0)) {
+      return 0;
+    }
+    if (mappages(dst_proc->pagetable, va2, PGSIZE, PTE2PA(*pte), PTE_FLAGS(*pte) | PTE_S)) {
+      return 0;
+    }
+
+    uint64 dst_pa_for_test = PTE2PA(*walk(dst_proc->pagetable, va2, 0));
+    if (src_pa_for_test == 0 || dst_pa_for_test == 0) {
+      return 0;
+    }
+
+    va += PGSIZE;
+    va2 += PGSIZE;
+  }
+
+  dst_proc->sz = dst_va + size;
+
+  return dst_va;
+}
+
+uint64 unmap_shared_pages(struct proc* p, uint64 addr, uint64 size) {
+  uint64 va = PGROUNDDOWN(addr);
+  for (; va < addr + size; va += PGSIZE) {
+    pte_t *pte = walk(p->pagetable, va, 0);
+    if (pte == 0 || ((*pte & PTE_V) == 0) || ((*pte & PTE_U) == 0) || ((*pte & PTE_S) == 0)) {
+      return -1;
+    }
+    uvmunmap(p->pagetable, va, 1, 0);
+  }
+
+  return 0;
+}
+
 // a user program that calls exec("/crypto_srv")
 // assembled from ../user/init_crypto_srv.S
 // od -t xC ../user/init_crypto_srv
@@ -110,4 +163,36 @@ crypto_srv_init(void)
 
   p->state = RUNNABLE;
   release(&p->lock);
+}
+
+uint64
+sys_map_shared_pages(void) 
+{
+  int src_pid;
+  int dst_pid;
+  uint64 va;
+  uint64 size;
+
+  argint(0, &src_pid);
+  argint(1, &dst_pid);
+  argaddr(2, &va);
+  argaddr(3, &size);
+
+  struct proc *src_proc = find_proc(src_pid);
+  
+  return map_shared_pages(src_proc, myproc(), va, size);
+}
+
+uint64
+sys_unmap_shared_pages(void)
+{
+  int pid;
+  uint64 va;
+  uint64 size;
+
+  argint(0, &pid);
+  argaddr(1, &va);
+  argaddr(2, &size);
+
+  return unmap_shared_pages(myproc(), va, size);
 }

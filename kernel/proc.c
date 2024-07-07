@@ -11,6 +11,10 @@ struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
 
+struct proc* find_proc(int pid) {
+  return &proc[pid];
+}
+
 struct proc *initproc;
 
 int nextpid = 1;
