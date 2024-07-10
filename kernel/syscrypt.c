@@ -26,41 +26,59 @@ uint64 map_shared_pages(struct proc* src_proc, struct proc* dst_proc, uint64 src
 
   uint64 va = PGROUNDDOWN(src_va);
   uint64 va2 = PGROUNDDOWN(dst_va);
-  for (int i = 0; i < (size / PGSIZE) + 1; i++) {
+
+  for (; va < src_va + size;) {
     pte_t *pte = walk(src_proc->pagetable, va, 0);
-    uint64 src_pa_for_test = PTE2PA(*pte);
+    uint64 pa = PTE2PA(*pte);
     if (pte == 0 || ((*pte & PTE_V) == 0) || ((*pte & PTE_U) == 0)) {
+      return 0;
+    }
+    if (pa == 0) {
       return 0;
     }
     if (mappages(dst_proc->pagetable, va2, PGSIZE, PTE2PA(*pte), PTE_FLAGS(*pte) | PTE_S)) {
       return 0;
     }
-
-    uint64 dst_pa_for_test = PTE2PA(*walk(dst_proc->pagetable, va2, 0));
-    if (src_pa_for_test == 0 || dst_pa_for_test == 0) {
-      return 0;
-    }
-
+    dst_proc->sz += PGSIZE;
     va += PGSIZE;
     va2 += PGSIZE;
   }
-
-  dst_proc->sz = dst_va + size;
 
   return dst_va;
 }
 
 uint64 unmap_shared_pages(struct proc* p, uint64 addr, uint64 size) {
+  if (size <= 0) {
+    return -1;
+  }
   uint64 va = PGROUNDDOWN(addr);
   for (; va < addr + size; va += PGSIZE) {
     pte_t *pte = walk(p->pagetable, va, 0);
     if (pte == 0 || ((*pte & PTE_V) == 0) || ((*pte & PTE_U) == 0) || ((*pte & PTE_S) == 0)) {
       return -1;
     }
-    uvmunmap(p->pagetable, va, 1, 0);
   }
 
+  int npages = (PGROUNDDOWN(addr + size) - PGROUNDDOWN(addr)) / PGSIZE + 1;
+  uvmunmap(p->pagetable, PGROUNDDOWN(addr), npages, 0);
+
+  p->sz -= npages * PGSIZE;
   return 0;
+  /*uint64 va = PGROUNDDOWN(addr);
+  for (; va < addr + size; va += PGSIZE) {
+    pte_t *pte = walk(p->pagetable, va, 0);
+    if (pte == 0 || ((*pte & PTE_V) == 0) || ((*pte & PTE_U) == 0) || ((*pte & PTE_S) == 0)) {
+      return -1;
+    }
+    uvmunmap(p->pagetable, va, 1, 0);
+    p->sz -= PGSIZE;
+  }
+
+  if (walk(p->pagetable, addr, 0) != 0) {
+    return -1;
+  }
+
+  return 0;*/
 }
 
 // a user program that calls exec("/crypto_srv")
@@ -113,7 +131,7 @@ uint64 sys_take_shared_memory_request(void) {
   
   const uint64 dst_va = map_shared_pages(src_proc, p, req.src_va, req.size);
   if (dst_va == 0) {
-    release(&src_proc->lock);
+    //release(&src_proc->lock);
     return -1;
   }
 
@@ -124,7 +142,7 @@ uint64 sys_take_shared_memory_request(void) {
   copyout(p->pagetable, arg_dst_va, (char*)&dst_va, sizeof(dst_va));
   copyout(p->pagetable, arg_dst_size, (char*)&req.size, sizeof(req.size));
 
-  release(&src_proc->lock);
+  //release(&src_proc->lock);
   return 0;
 }
 

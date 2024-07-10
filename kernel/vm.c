@@ -246,6 +246,16 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
       uvmdealloc(pagetable, a, oldsz);
       return 0;
     }
+    // perform walk for debugging
+    pte_t *pte = walk(pagetable, a, 0);
+    if (pte == 0) {
+      panic("uvmalloc: walk");
+    }
+    // get ppn
+    uint64 ppn = PTE2PA(*pte);
+    if (ppn == 0) {
+      panic("uvmalloc: ppn");
+    }
   }
   return newsz;
 }

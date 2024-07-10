@@ -12,7 +12,15 @@ struct cpu cpus[NCPU];
 struct proc proc[NPROC];
 
 struct proc* find_proc(int pid) {
-  return &proc[pid];
+  struct proc *p;
+  for(p = proc; p < &proc[NPROC]; p++){
+    //acquire(&p->lock);
+    if(p->pid == pid){
+      return p;
+    }
+    //release(&p->lock);
+  }
+  return 0;
 }
 
 struct proc *initproc;
@@ -691,4 +699,13 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+uint64
+getppn(uint64 va)
+{
+  struct proc *p = myproc();
+  uint64 ppn = walkaddr(p->pagetable, va);
+  ppn = ppn >> 12;
+  return ppn;
 }

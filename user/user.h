@@ -28,6 +28,7 @@ int take_shared_memory_request(void**, uint64*);
 int remove_shared_memory_request(void*, uint64);
 uint64 map_shared_pages(int, int, uint64, uint64);
 int unmap_shared_pages(int, uint64, uint64);
+uint64 getppn(uint64);
 
 // ulib.c
 int stat(const char*, struct stat*);

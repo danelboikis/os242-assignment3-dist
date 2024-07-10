@@ -25,3 +25,4 @@
 #define SYS_remove_shared_memory_request 26
 #define SYS_map_shared_pages 27
 #define SYS_unmap_shared_pages 28
+#define SYS_getppn 29

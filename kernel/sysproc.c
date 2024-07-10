@@ -89,3 +89,11 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_getppn(void)
+{
+  uint64 va;
+  argaddr(0, &va);
+  return getppn(va);
+}
